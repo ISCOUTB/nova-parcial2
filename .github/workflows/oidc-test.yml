@@ -1,0 +1,27 @@
+
+name: OIDC - prueba inicial
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Verificar GitHub Actions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Verificar estructura del proyecto
+        run: |
+          echo "Proyecto NOVA"
+          test -d app
+          test -d infra
+          test -d config
+          test -d scripts
+          test -d docs
+          echo "Estructura verificada correctamente"
