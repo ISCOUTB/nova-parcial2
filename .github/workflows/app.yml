@@ -1,0 +1,34 @@
+
+name: App - Validación y despliegue
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar aplicación
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Verificar archivos de la aplicación
+        run: |
+          test -f app/app.py
+          test -f app/requirements.txt
+          test -f app/Dockerfile
+          echo "Archivos de la aplicación encontrados"
