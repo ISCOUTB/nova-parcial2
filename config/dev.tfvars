@@ -20,5 +20,5 @@ max_replicas   = 2
 
 # Demostración de cambio de infraestructura: cambiar este valor (por ejemplo "1" -> "2").
 extra_tags = {
-  version_infra = "1"
+  version_infra = "2"
 }
