@@ -1,0 +1,23 @@
+=== Evidencia 07: cambio de etiqueta por pipeline (Taller 2, NOVA)
+Fecha: 2026-10-15 09:00
+
+Cambio de infraestructura: config/dev.tfvars version_infra 1 -> 2 (PR #47), aplicado por el
+pipeline infra.yml: https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451
+
+=== Etiquetas de la Container App ca-nova-t2-dev
+{
+  "ambiente": "dev",
+  "equipo": "NOVA",
+  "gestionado_por": "terraform",
+  "proyecto": "taller2-aca",
+  "version_infra": "2"
+}
+
+=== version_infra en todos los recursos de rg-nova-t2-dev
+Nombre           Version_infra
+---------------  ---------------
+id-nova-t2-pull  2
+acrnovat2ssab    2
+log-nova-t2-dev  2
+cae-nova-t2-dev  2
+ca-nova-t2-dev   2
