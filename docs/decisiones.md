@@ -1,142 +1,119 @@
 # Decisiones técnicas, limitaciones y mejoras — Grupo NOVA
 
-**Proyecto:** Taller 2 — Infraestructura y despliegue automatizado en Azure
+**Proyecto:** Infraestructura y despliegue automatizado en Azure  
+**Equipo:** NOVA 
+**Ambiente:** Desarrollo (`dev`)
 
+## 1. Decisiones que tomamos
 
-## 1. Decisiones técnicas implementadas
+Durante el taller buscamos una solución que pudiéramos desplegar, probar y explicar, sin perder de vista el presupuesto de Azure for Students ni las condiciones de seguridad. Estas fueron nuestras principales decisiones.
 
-### Infraestructura como código
+### Infraestructura con Terraform
 
-Se utiliza Terraform para definir los recursos de Azure de manera organizada y reproducible, evitando depender exclusivamente de configuraciones manuales.
+Elegimos Terraform para definir y administrar los recursos de Azure desde el repositorio. Esto nos permitió revisar los cambios antes de aplicarlos y evitar depender únicamente de configuraciones manuales. Utilizamos un backend remoto en Azure Storage para conservar el estado y configuramos concurrencia en GitHub Actions para no ejecutar dos actualizaciones de infraestructura al mismo tiempo.
 
-### Plataforma de despliegue
+Los recursos de soporte y la identidad federada se preparan con `scripts/bootstrap.sh`. Terraform administra después el registro de imágenes, Log Analytics, el entorno de Container Apps, la aplicación y la identidad de descarga de imágenes.
 
-Se seleccionó Azure Container Apps para ejecutar la aplicación web desarrollada con Python y Flask, utilizando Docker para empaquetarla.
+### Aplicación con Flask y Docker
 
-### Registro de imágenes
+Para la aplicación utilizamos Python 3.12 y Flask porque necesitábamos un servicio HTTP ligero y fácil de probar. La empaquetamos con Docker y configuramos Gunicorn para escuchar en el puerto `8000`.
 
-Se configuró Azure Container Registry (ACR) en su plan Basic, priorizando el control de costos del proyecto académico.
+Para mejorar su funcionamiento y seguridad, ejecutamos el contenedor con un usuario sin privilegios, añadimos `.dockerignore` para no incluir archivos innecesarios y creamos el endpoint `/health`. Esta ruta nos permite comprobar automáticamente el estado de la aplicación después de cada despliegue.
 
-Se deshabilitó la cuenta administradora del registro y se configuró una identidad administrada con permisos AcrPull para descargar imágenes.
+También utilizamos `APP_VERSION` para identificar la versión que se está ejecutando; actualmente su valor predeterminado es `v2`.
 
-### Recursos y costos
+### Despliegue en Azure Container Apps
 
-La infraestructura contempla límites de CPU, memoria y escalado para controlar el consumo de recursos. Su configuración y comportamiento real deben verificarse durante el despliegue.
+Elegimos Azure Container Apps porque podemos ejecutar el contenedor sin administrar una máquina virtual. Configuramos HTTPS externo, el perfil Consumption, `0.25` vCPU, `0.5Gi` de memoria y entre una y dos réplicas.
 
-### Automatización
+Estos valores nos ayudan a controlar el consumo durante la evaluación. Confirmamos la configuración efectiva mediante `docs/evidencias/09-limites-y-etiquetas.txt` y las capturas de Azure.
 
-Se utilizan GitHub Actions para validar el código, construir imágenes, analizar su seguridad y ejecutar los procesos relacionados con el despliegue.
+### Imágenes en Azure Container Registry
 
-La autenticación mediante OIDC está contemplada para evitar el uso de credenciales permanentes de Azure. Su funcionamiento debe validarse mediante evidencias de ejecución.
+Utilizamos Azure Container Registry (ACR) en el plan Basic por su costo y porque es suficiente para nuestro ambiente académico. Deshabilitamos la cuenta administradora y las descargas anónimas. Para obtener las imágenes desde Container Apps configuramos una identidad administrada con el permiso `AcrPull`.
 
-## 2. Resultados de seguridad
+Sabíamos que ACR Basic no incorpora todas las funciones avanzadas de los planes superiores. Por ello documentamos los controles de seguridad que no cumplimos, en lugar de presentarlos como corregidos.
 
-### Checkov
+### Automatización y autenticación
 
-Se ejecutó Checkov sobre la infraestructura Terraform.
+Separamos los workflows de infraestructura y aplicación. `infra.yml` ejecuta Checkov y las validaciones de Terraform; desde `main`, también realiza `plan` y `apply`. `app.yml` construye y analiza la imagen con Trivy, la publica en ACR y actualiza Container Apps cuando corresponde.
 
-**Resultados:**
-- 2 controles aprobados.
-- 8 controles fallidos.
-- 0 controles omitidos.
+Para la conexión con Azure configuramos OIDC, evitando guardar una contraseña permanente de la identidad del pipeline. Las imágenes se publican con etiquetas SHA para relacionarlas con el commit que las generó.
 
-Los controles aprobados verificaron que la cuenta administradora de ACR está deshabilitada y que no se permite la descarga anónima de imágenes.
+Comprobamos una ejecución exitosa de [infraestructura](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451) y otra de [aplicación](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318).
 
-Los controles fallidos fueron:
+## 2. Seguridad: Checkov y las excepciones justificadas
 
-| Control | Hallazgo |
-|---|---|
-| CKV_AZURE_166 | Cuarentena, análisis y verificación de imágenes |
-| CKV_AZURE_163 | Análisis de vulnerabilidades del registro |
-| CKV_AZURE_164 | Uso de imágenes firmadas o confiables |
-| CKV_AZURE_139 | Restricción de acceso público al registro |
-| CKV_AZURE_165 | Georreplicación |
-| CKV_AZURE_167 | Retención de manifiestos sin etiqueta |
-| CKV_AZURE_233 | Redundancia por zonas |
-| CKV_AZURE_237 | Puntos de conexión de datos dedicados |
+En el primer análisis de Checkov sobre Terraform encontramos **2 controles aprobados, 8 fallidos y 0 omitidos**. Los aprobados fueron `CKV_AZURE_137`, que comprueba la cuenta administradora deshabilitada en ACR, y `CKV_AZURE_138`, que comprueba la deshabilitación de descargas anónimas.
 
-### Justificación de las excepciones de Checkov
+Los ocho hallazgos restantes correspondían a `azurerm_container_registry.acr`. Los revisamos con Sofía, responsable de infraestructura, y decidimos mantener ACR Basic para el ambiente de desarrollo, documentando cada excepción y su riesgo.
 
-**Ambiente:** Desarrollo académico (`dev`)
-**Recurso evaluado:** `azurerm_container_registry.acr`
-**Plan utilizado:** Azure Container Registry Basic
-**Responsable de la revisión técnica:** Sofía — Infraestructura y Terraform
-
-Durante el análisis de seguridad con Checkov se identificaron ocho controles fallidos correspondientes a Azure Container Registry. Después de revisarlos con la responsable de infraestructura, se decidió mantener ACR Basic para el proyecto académico, teniendo en cuenta los costos y el alcance de la solución.
-
-Los controles se registran como excepciones documentadas para el ambiente de desarrollo. Esta decisión no significa que los riesgos hayan desaparecido ni que los controles hayan sido corregidos.
-
-#### Análisis individual de los controles
-
-| Control | Justificación técnica | Control compensatorio | Riesgo residual |
+| Control | Por qué justificamos la excepción | Medida compensatoria | Riesgo residual |
 |---|---|---|---|
-| **CKV_AZURE_139** — Acceso público | ACR Basic no proporciona las mismas opciones de conectividad privada y restricciones de red de Premium. Se mantiene el acceso público para el ambiente académico. | Cuenta administradora deshabilitada, descargas anónimas deshabilitadas, autenticación mediante Microsoft Entra ID, OIDC y permisos mínimos `AcrPush`/`AcrPull`. | El endpoint del registro continúa accesible desde Internet, aunque las operaciones requieren autorización. |
-| **CKV_AZURE_163** — Escaneo de vulnerabilidades | El análisis administrado mediante Microsoft Defender supone habilitar un servicio adicional con costo. | Trivy analiza las imágenes dentro de GitHub Actions antes de publicarlas y bloquea los hallazgos HIGH o CRITICAL incluidos en sus criterios. | No existe un análisis administrado continuo de las imágenes almacenadas. Pueden descubrirse nuevas vulnerabilidades después de la publicación. |
-| **CKV_AZURE_164** — Imágenes firmadas | No se ha implementado un mecanismo de firma criptográfica y verificación de imágenes en el entorno académico. | Las imágenes se publican mediante el pipeline autorizado, utilizando etiquetas asociadas al SHA del commit y autenticación OIDC. | El SHA permite rastrear la versión, pero no sustituye una firma criptográfica que garantice autenticidad e integridad. |
-| **CKV_AZURE_165** — Georreplicación | La georreplicación administrada requiere capacidades de ACR Premium. El proyecto utiliza una sola región, `brazilsouth`. | El código fuente y Dockerfile se conservan en GitHub, permitiendo reconstruir y publicar las imágenes. | Ante una caída regional, el registro puede quedar indisponible y la reconstrucción no garantiza una recuperación inmediata. |
-| **CKV_AZURE_166** — Cuarentena de imágenes | No se utiliza cuarentena administrada dentro de ACR. | Trivy funciona como control preventivo antes de la publicación y puede bloquear imágenes con vulnerabilidades HIGH o CRITICAL que tengan corrección disponible. | No existe cuarentena nativa. Pueden permanecer riesgos de severidades no evaluadas o vulnerabilidades sin corrección. |
-| **CKV_AZURE_167** — Retención de manifiestos | No se dispone de una política automática de limpieza de manifiestos sin etiqueta equivalente a la exigida por el control. | Las imágenes se publican con etiquetas basadas en el SHA del commit. Se propone revisar y eliminar imágenes antiguas de forma controlada. | Pueden acumularse imágenes o manifiestos y aumentar el consumo de almacenamiento. |
-| **CKV_AZURE_233** — Redundancia por zonas | El control se registra como una posible discrepancia entre la evaluación de Checkov y las capacidades actuales de ACR. Debe verificarse la redundancia efectiva del registro en Azure. | Las imágenes pueden reconstruirse a partir del repositorio y del pipeline. | Mientras no se compruebe el estado real, no puede confirmarse la protección frente a una falla de zona. |
-| **CKV_AZURE_237** — Endpoints de datos dedicados | La infraestructura no utiliza conectividad privada ni endpoints de datos dedicados. Esta funcionalidad no forma parte de la configuración seleccionada con ACR Basic. | La autenticación y autorización del registro utilizan identidades administradas, OIDC y permisos mínimos. | Las conexiones con el registro continúan dependiendo de endpoints públicos y no cuentan con aislamiento de red privado. |
+| **CKV_AZURE_139 — Acceso público** | ACR Basic no ofrece las mismas opciones de redes privadas y restricciones de acceso que Premium. | Cuenta administradora y descargas anónimas deshabilitadas; Microsoft Entra ID, OIDC y permisos mínimos `AcrPush`/`AcrPull`. | El endpoint del registro sigue accesible desde Internet, aunque las operaciones requieren autorización. |
+| **CKV_AZURE_163 — Escaneo de vulnerabilidades** | No habilitamos el análisis administrado de Microsoft Defender, que representa un servicio adicional con costo. | Trivy revisa las imágenes antes de publicarlas y puede bloquear hallazgos HIGH y CRITICAL incluidos en sus filtros. | No hay análisis administrado continuo de las imágenes almacenadas; pueden aparecer nuevas vulnerabilidades después de publicarlas. |
+| **CKV_AZURE_164 — Imágenes firmadas** | No implementamos firma criptográfica y verificación de imágenes en este entorno. | Publicación mediante el pipeline autorizado, autenticación OIDC y etiquetas SHA. | Un SHA permite identificar la versión, pero no reemplaza una firma que garantice autenticidad e integridad. |
+| **CKV_AZURE_165 — Georreplicación** | Trabajamos en una sola región (`brazilsouth`) y la georreplicación administrada requiere capacidades de Premium. | Conservamos el código y Dockerfile en GitHub para reconstruir las imágenes. | Una falla regional podría dejar indisponible ACR; reconstruir las imágenes no garantiza recuperación inmediata. |
+| **CKV_AZURE_166 — Cuarentena de imágenes** | No configuramos cuarentena administrada dentro de ACR. | Trivy actúa como control preventivo del pipeline y bloquea la publicación ante hallazgos que incumplen sus criterios. | No existe cuarentena nativa; pueden permanecer vulnerabilidades no evaluadas o sin corrección disponible. |
+| **CKV_AZURE_167 — Retención de manifiestos** | No configuramos una política automática de limpieza de manifiestos sin etiqueta. | Utilizamos etiquetas SHA y proponemos revisar periódicamente las imágenes antiguas. | La acumulación de imágenes o manifiestos puede aumentar el almacenamiento y su costo. |
+| **CKV_AZURE_233 — Redundancia por zonas** | Identificamos una posible discrepancia entre la evaluación de Checkov y las capacidades actuales de ACR; debemos comprobar la redundancia efectiva del registro. | Podemos reconstruir las imágenes desde GitHub y el pipeline. | No podemos confirmar protección frente a fallas de zona sin verificar su configuración real en Azure. |
+| **CKV_AZURE_237 — Endpoints de datos dedicados** | No implementamos endpoints dedicados ni aislamiento de red privado con la configuración Basic elegida. | Utilizamos identidades autorizadas, OIDC y permisos mínimos. | La comunicación depende de endpoints públicos y no dispone de aislamiento privado de red. |
 
-#### Decisión técnica
+Registramos las ocho excepciones en `.checkov.yaml` mediante `skip-check`. Después, el análisis informó **2 controles aprobados, 0 fallidos y 0 omitidos contabilizados**, porque los ocho controles excluidos ya no participaron en el reporte.
 
-Se mantiene Azure Container Registry en el plan Basic por razones de costo y por el alcance académico del ambiente de desarrollo.
+**Esto no significa que solucionamos los ocho riesgos.** Las excepciones se aceptaron únicamente para el ambiente académico y tendrían que revisarse nuevamente antes de utilizar la solución en producción. Entre ellas, el acceso público a ACR merece especial atención por mantener expuesto el endpoint del registro.
 
-Sofía, responsable de infraestructura, revisó los ocho hallazgos y consideró técnicamente justificadas las excepciones dentro de este contexto, sujetas a las limitaciones y riesgos residuales descritos.
+**Evidencias:** `docs/evidencias/checkov-terraform.txt`, `docs/evidencias/checkov-excepciones-2026-10-15.txt`, `.checkov.yaml` y la [ejecución del pipeline de infraestructura](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451).
 
-Estas excepciones se documentan en `.checkov.yaml` y en este archivo para conservar la trazabilidad de la decisión.
+## 3. Resultado del análisis con Trivy
 
-La exclusión de un control de Checkov no equivale a su aprobación. Si la solución se trasladara a producción, deberían evaluarse nuevamente todos los controles y aplicar las medidas de seguridad correspondientes.
+Realizamos una prueba local con Trivy 0.69.3 sobre la imagen `nova-app:seguridad`. No encontramos vulnerabilidades HIGH ni CRITICAL **dentro de los filtros configurados**: `--severity HIGH,CRITICAL` y `--ignore-unfixed`.
 
-#### Mejoras futuras
+También integramos Trivy en GitHub Actions y comprobamos ejecuciones exitosas durante la validación y antes de publicar las imágenes en ACR.
 
-- Evaluar la conectividad privada y las características avanzadas de ACR.
-- Implementar un análisis periódico de vulnerabilidades sobre imágenes almacenadas.
-- Incorporar firmas criptográficas con herramientas compatibles, como Notation o Cosign.
-- Definir una política de limpieza de imágenes antiguas.
-- Verificar la redundancia por zonas real del registro.
-- Revisar periódicamente las excepciones de seguridad y retirar aquellas que puedan solucionarse.
+El resultado no equivale a una revisión completa de todas las severidades ni confirma ausencia de secretos. Por eso lo utilizamos como control complementario, no como garantía absoluta de seguridad.
 
+**Evidencias:** `docs/evidencias/trivy-resultado.md`, las capturas `02-trivy-resultados-parte1.png` y `03-trivy-resultados-parte2.png`, y la [ejecución de aplicación](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318).
 
-**Evidencia:** `docs/evidencias/checkov-terraform.txt`
+## 4. Demostraciones y limitaciones encontradas
 
-### Trivy
+### Cambio de la aplicación de v1 a v2
 
-Se ejecutó Trivy 0.69.3 sobre la imagen Docker `nova-app:seguridad`.
+Para comprobar el despliegue automático realizamos un cambio controlado en la aplicación. La versión anterior corresponde al commit `2e8b26f` y la nueva al commit `3cfe621`.
 
-**Resultados:**
-- 0 vulnerabilidades HIGH detectadas.
-- 0 vulnerabilidades CRITICAL detectadas.
+Las dos ejecuciones finalizaron correctamente:
 
-El resultado corresponde al análisis local con las opciones `--severity HIGH,CRITICAL` y `--ignore-unfixed`. Por tanto, no representa una evaluación exhaustiva de todas las vulnerabilidades.
+- [Pipeline de v1](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897).
+- [Pipeline de v2](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318).
 
-Este análisis ayuda a detectar problemas en la imagen antes del despliegue, pero no reemplaza todos los controles de seguridad del registro de contenedores.
+El archivo `docs/evidencias/06-revisiones-e-imagenes.txt` confirma que las imágenes de ambos commits estaban disponibles en ACR y que la aplicación pública respondía con `v2`. Esto nos permite relacionar el código, la imagen y el despliegue.
 
-**Evidencia:** `docs/evidencias/trivy-resultado.md`
+### Historial de revisiones de Container Apps
 
-## 3. Limitaciones identificadas
+Configuramos `ca-nova-t2-dev` con `revision_mode = "Single"`. Durante la comprobación realizada por Sofía, el listado disponible mostró una sola revisión activa, `ca-nova-t2-dev--latest`, asociada a la imagen `v2`. No aparecieron dos revisiones diferenciadas que pudiéramos presentar directamente como anterior y nueva.
 
-- El plan Basic de ACR debe evaluarse frente a los controles de seguridad avanzada, conectividad privada y disponibilidad requeridos.
-- Se identificaron ocho controles fallidos de Checkov, revisados con Sofía y documentados como excepciones técnicas para el ambiente dev. Los riesgos residuales permanecen y deben reevaluarse si cambia el alcance del proyecto.
-- El resultado de Trivy corresponde a una imagen local y a filtros específicos.
-- Se necesita verificar que los controles automatizados de GitHub Actions se ejecuten y generen evidencia.
-- Se deben confirmar mediante pruebas reales el despliegue, la aplicación pública y las revisiones de Azure Container Apps.
+Por este motivo, demostramos el cambio de `v1` a `v2` mediante los dos pipelines, las etiquetas SHA en ACR y las respuestas de la aplicación. Esta es **una limitación observada en nuestro despliegue**, no una afirmación de que Azure Container Apps nunca conserve revisiones anteriores.
 
-## 4. Mejoras propuestas
+**Evidencias:** `docs/evidencias/06-revisiones-e-imagenes.txt`, `06-revision-actual.png` y `06b-revisiones-inactivas.png`.
 
-1. Revisar y corregir, cuando sea viable, los hallazgos de Checkov.
-2. Evaluar los costos y beneficios de características avanzadas de ACR.
-3. Mantener Trivy integrado en GitHub Actions para analizar las imágenes antes de publicarlas.
-4. Verificar la autenticación OIDC y el manejo seguro de variables sensibles.
-5. Conservar capturas y registros de los despliegues exitosos.
-6. Actualizar periódicamente las dependencias y las imágenes base.
-7. Revisar los controles de seguridad antes de utilizar la solución en un entorno productivo.
+### Cambio de infraestructura
 
-## 5. Conclusión
+También probamos una modificación independiente de infraestructura: actualizamos la etiqueta `version_infra` de `1` a `2` en `config/dev.tfvars`. El cambio se integró mediante el PR #47 y el pipeline de infraestructura aplicó la nueva configuración.
 
-El Grupo NOVA ha implementado una base de infraestructura automatizada con herramientas de análisis de seguridad. Las pruebas locales permiten identificar riesgos y documentar los resultados.
+El reporte `docs/evidencias/07-cambio-etiqueta.txt` muestra `version_infra = 2` en los recursos consultados. Así pudimos demostrar que no necesitábamos cambiar el código Flask para actualizar la infraestructura.
 
-Las excepciones de Checkov fueron revisadas y justificadas técnicamente para el ambiente académico. Permanecen pendientes la verificación de los controles automatizados y la recopilación completa de las evidencias del despliegue
+### Costos y disponibilidad
 
-Las decisiones de aceptación de riesgos y los cambios de infraestructura deberán validarse con las integrantes responsables del proyecto.
+Trabajamos con ACR Basic, una sola región y recursos limitados. Esta decisión es adecuada para el alcance del taller, pero no proporciona todas las opciones de conectividad, disponibilidad y seguridad necesarias en un sistema productivo.
+
+Para controlar el gasto configuramos límites de CPU, memoria, réplicas y una cuota de ingesta de Log Analytics. El detalle está en [docs/destruccion-y-costos.md](destruccion-y-costos.md).
+
+## 5. Mejoras que proponemos
+
+Si continuáramos desarrollando la solución, priorizaríamos revisar las excepciones de Checkov, evaluar conectividad privada para ACR, implementar firma de imágenes y análisis periódicos de vulnerabilidades, establecer una política de limpieza de imágenes antiguas y mejorar la conservación de revisiones para facilitar comparaciones entre despliegues.
+
+También volveríamos a revisar los permisos y secretos antes de utilizar el sistema en otro ambiente y evaluaríamos opciones de mayor disponibilidad si la aplicación necesitara operar fuera del contexto académico.
+
+## 6. Conclusión
+
+Durante el taller comprobamos que no basta con tener una aplicación funcionando: también necesitamos automatizar los despliegues, revisar la infraestructura, controlar los costos y conservar evidencias. Las pruebas de Terraform, GitHub Actions, Checkov y Trivy nos ayudaron a entender cómo se relacionan estas tareas y a identificar las limitaciones que debemos tener en cuenta como equipo.
