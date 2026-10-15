@@ -1,11 +1,12 @@
 
-name: OIDC - prueba inicial
+name: Prueba OIDC Azure
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   test:
