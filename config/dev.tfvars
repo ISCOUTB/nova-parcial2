@@ -8,8 +8,8 @@ environment         = "dev"
 name_suffix         = "ssab"
 
 # Arranque: primero  false (aún no hay imagen). Luego = true + SHA de la primera imagen.
-create_container_app = false
-initial_image_tag    = ""
+create_container_app = true
+initial_image_tag    = "41717c86acd34580d928f9ac11c2ec089609fd08"
 
 # Contenedor y escalado (límites para controlar costos)
 container_port = 8000
