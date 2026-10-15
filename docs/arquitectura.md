@@ -1,103 +1,119 @@
-# Arquitectura técnica — Taller 2 NOVA
+# Arquitectura técnica — Grupo NOVA
 
-**Proyecto:** Despliegue de una aplicación HTTP en Azure Container Apps mediante Terraform y GitHub Actions  
-**Equipo:** NOVA (Sofía, Sara, Ana y Bianca)  
-**Responsable de documentación:** Bianca  
-**Estado del documento:** Arquitectura propuesta; el despliegue y los controles deben verificarse antes de marcar requisitos como cumplidos.
+**Proyecto:** Infraestructura y despliegue automatizado en Azure  
+**Equipo:** NOVA
+**Ambiente:** `dev`  
+**Región:** `brazilsouth`
 
-## 1. Objetivo
+## 1. Cómo organizamos nuestra solución
 
-Describir la arquitectura prevista para publicar una aplicación HTTP de Python en Azure Container Apps y automatizar dos procesos distintos: cambios de la aplicación y cambios de infraestructura. La solución utiliza Terraform para declarar recursos, GitHub Actions para ejecutar los pipelines y controles de seguridad Checkov y Trivy.
+Para desplegar nuestra aplicación en Azure separamos el trabajo en dos procesos. Terraform administra los recursos de infraestructura, mientras que GitHub Actions construye, analiza y publica las imágenes Docker de nuestra aplicación Flask.
+
+La configuración utiliza Azure Container Registry para las imágenes, Azure Container Apps para ejecutar el servicio, Log Analytics para los registros y Azure Storage para el estado remoto de Terraform. Los workflows se autentican en Azure mediante OIDC.
 
 ## 2. Diagrama de arquitectura
 
 ```mermaid
 flowchart TD
-    D[Integrantes NOVA] -->|Ramas y Pull Requests| GH[Repositorio GitHub]
-    GH -->|Cambios en app/| WA[GitHub Actions: app.yml]
-    GH -->|Cambios en infra/ o config/| WI[GitHub Actions: infra.yml]
+    EQ[Grupo NOVA] -->|Ramas y Pull Requests| GH[Repositorio GitHub]
+    GH -->|Cambios en app| APP[GitHub Actions: app.yml]
+    GH -->|Cambios en infra, config o Checkov| INF[GitHub Actions: infra.yml]
 
-    WI -->|Validación de Terraform y Checkov| TF[Terraform]
-    WA -->|Build y análisis Trivy| IMG[Imagen Docker]
-    IMG -->|Publicación| ACR[Azure Container Registry - Basic]
+    APP -->|Construcción y Trivy| IMG[Imagen Docker]
+    IMG -->|Publicación con SHA| ACR[Azure Container Registry Basic]
+    INF -->|Checkov y validaciones| TF[Terraform]
 
-    WI -->|Autenticación OIDC| ID[Identidad federada de Azure]
-    WA -->|Autenticación OIDC| ID
-    ID --> AZ[Suscripción Azure]
-    TF -->|Crear y actualizar| RG[Grupo de recursos del proyecto]
+    APP -->|Autenticación OIDC| OIDC[Identidad federada de Azure]
+    INF -->|Autenticación OIDC| OIDC
 
-    RG --> LAW[Log Analytics Workspace]
-    RG --> CAE[Container Apps Environment]
+    BOOT[scripts/bootstrap.sh] -->|Prepara| OPS[Recursos de soporte]
+    BOOT -->|Crea| RG[Grupo de recursos dev]
+    OPS --> STATE[(Azure Storage: estado remoto)]
+    STATE -.->|Estado compartido| TF
+    TF -->|Administra recursos en| RG
+
+    RG --> LAW[Log Analytics]
     RG --> ACR
-    RG --> MI[Identidad administrada de descarga]
-    CAE --> CA[Azure Container App]
-    MI -->|Permiso AcrPull| ACR
-    CA -->|Descarga de imagen con identidad| ACR
-    WA -->|Actualizar imagen y generar revisión| CA
-    CA -->|Enviar registros| LAW
+    RG --> ENV[Container Apps Environment]
+    RG --> MI[Identidad administrada AcrPull]
+    ENV --> CA[Azure Container App]
+    MI -->|Permiso de descarga| ACR
+    CA -->|Obtiene imagen| ACR
+    APP -->|Actualiza imagen| CA
+    CA -->|Registros| LAW
 
-    U[Usuario final] -->|HTTPS público| CA
-    CA -->|GET / y GET /health| API[Aplicación Python - puerto 8000]
-    BE[(Azure Storage: estado remoto de Terraform)] -.->|Estado| TF
+    USR[Usuario final] -->|HTTPS| CA
+    CA -->|Puerto 8000| API[Flask y Gunicorn]
+    API --> HOME[GET /]
+    API --> HEALTH[GET /health]
 ```
 
-> **Nota:** El diagrama representa la arquitectura objetivo. No constituye evidencia de que todos estos recursos existan actualmente en Azure.
+El diagrama refleja los componentes que configuramos y cuya operación principal comprobamos con los archivos de Terraform y las ejecuciones de GitHub Actions. No sustituye las evidencias de los recursos existentes en Azure.
 
-## 3. Componentes y función
+## 3. Componentes principales
 
-- **GitHub:** almacena el código fuente y la documentación. Cada integrante trabaja en su rama y propone cambios mediante Pull Requests.
-- **GitHub Actions (`app.yml`):** construye la imagen, ejecuta Trivy, la publica en Azure Container Registry y, cuando corresponda, actualiza la imagen de la Container App.
-- **GitHub Actions (`infra.yml`):** ejecuta las validaciones de Terraform y Checkov, genera un plan y aplica cambios de infraestructura según la rama y las reglas acordadas.
-- **OIDC:** permite que GitHub Actions se autentique en Azure con una credencial federada de duración limitada, sin almacenar una contraseña o client secret permanente.
-- **Terraform:** declara la infraestructura de Azure y utiliza un backend remoto para almacenar su estado.
-- **Azure Storage:** conserva el estado remoto de Terraform; se prepara una sola vez por fuera de la infraestructura principal.
-- **Azure Container Registry (ACR Basic):** almacena las imágenes Docker de la aplicación.
-- **Identidad administrada de descarga:** concede a la Container App el rol `AcrPull` sobre ACR para obtener imágenes sin usar contraseñas del registro.
-- **Azure Container Apps Environment:** aloja y administra la ejecución de la aplicación.
-- **Azure Container App:** expone la aplicación por HTTPS, dirige solicitudes al puerto 8000 y gestiona las revisiones de despliegue.
-- **Log Analytics:** centraliza los registros operativos, evitando registrar secretos.
+**GitHub y GitHub Actions.** Guardamos el código, la infraestructura y la documentación en un mismo repositorio. Utilizamos ramas y Pull Requests para organizar los cambios. El workflow `app.yml` se encarga de la imagen y del despliegue de la aplicación; `infra.yml` ejecuta Checkov, las validaciones, el plan y la aplicación de Terraform.
 
-## 4. Configuración objetivo de la aplicación
+**Terraform y Azure Storage.** Definimos los recursos en `infra/`. El script `scripts/bootstrap.sh` prepara primero los grupos de recursos, la identidad federada y el almacenamiento del estado remoto. Después, Terraform administra los recursos del proyecto dentro de `rg-nova-t2-dev`.
 
-| Parámetro | Valor previsto |
+**Azure Container Registry.** Utilizamos ACR Basic para almacenar imágenes etiquetadas con el SHA del commit. Deshabilitamos la cuenta administradora y configuramos una identidad con `AcrPull` para que Container Apps descargue las imágenes.
+
+**Azure Container Apps.** Nuestra aplicación se ejecuta con perfil Consumption, acceso HTTPS y un contenedor que escucha en el puerto `8000`. El modo de revisiones configurado es `Single`.
+
+**Log Analytics.** Reúne los registros operativos y tiene una retención de 30 días, con una cuota diaria de `0.5 GB` para controlar su consumo.
+
+## 4. Configuración comprobada
+
+| Parámetro | Valor |
 |---|---|
-| Lenguaje y servicio | Python con aplicación HTTP |
-| Puerto interno | `8000` |
-| Ruta principal | `GET /` |
-| Ruta de salud | `GET /health`, respuesta HTTP 200 con `{"status":"ok"}` |
-| Acceso externo | HTTPS mediante el ingreso de Azure Container Apps |
-| CPU | `0.25` vCPU |
-| Memoria | `0.5Gi` |
-| Réplicas | Mínimo `1`, máximo `2` |
-| Variables no sensibles | `APP_ENV=dev`, `TEAM_NAME=NOVA` |
-| Secreto | `APP_SECRET`, almacenado como secreto, sin exponer su valor |
-| Versión | Identificador visible en `/`, actualizable para demostrar v1 → v2 |
+| Aplicación | Python 3.12, Flask y Gunicorn |
+| Puerto del contenedor | `8000` |
+| Rutas | `GET /` y `GET /health` |
+| Acceso externo | HTTPS |
+| CPU por réplica | `0.25` vCPU |
+| Memoria por réplica | `0.5Gi` |
+| Escalado | Mínimo `1`, máximo `2` réplicas |
+| Región | `brazilsouth` |
+| Modo de revisiones | `Single` |
+| Variables no sensibles | `APP_ENV=dev` y `TEAM_NAME=NOVA` |
+| Secreto | `APP_SECRET`, referenciado como secreto de Container Apps |
 
-## 5. Flujo de despliegue previsto
+Los valores de CPU, memoria, réplicas y etiquetas se comprobaron en `docs/evidencias/09-limites-y-etiquetas.txt`. Los cambios posteriores de la etiqueta `version_infra` se registraron en `docs/evidencias/07-cambio-etiqueta.txt`.
 
-1. **Revisión de código:** la integrante crea una rama, realiza los cambios y abre un Pull Request para revisión.
-2. **Infraestructura:** al integrar cambios de `infra/` o `config/`, el pipeline valida y aplica la configuración con Terraform; Checkov revisa riesgos de infraestructura.
-3. **Aplicación:** al integrar cambios de `app/`, el pipeline construye la imagen, ejecuta Trivy y publica la versión en ACR.
-4. **Actualización:** GitHub Actions actualiza la imagen de Azure Container Apps, generando una nueva revisión para la demostración.
-5. **Comprobación:** se consultan la URL pública y `/health`; las ejecuciones y los resultados de seguridad se guardan como evidencias.
+La ruta principal devuelve un mensaje, el ambiente y la versión; `/health` devuelve `status: ok` y la versión. El código actual utiliza `v2` como valor predeterminado de `APP_VERSION`.
 
-**Arranque inicial:** la identidad federada y el almacenamiento del estado se crean previamente. El equipo debe coordinar la primera imagen y la creación de Container Apps para evitar referencias a una imagen privada inexistente.
+## 5. Cómo funciona cada despliegue
 
-## 6. Seguridad y costos
+### Infraestructura
 
-- No se guardan contraseñas, tokens ni valores de secretos en el repositorio o en capturas.
-- OIDC autentica los pipelines; una identidad administrada con `AcrPull` permite descargar imágenes de ACR.
-- Checkov revisa Terraform; Trivy analiza la imagen Docker antes de publicarla.
-- Los límites previstos son `0.25` vCPU, `0.5Gi` y hasta dos réplicas, con ACR Basic.
-- El almacenamiento de estado y los recursos de Azure pueden generar costos. No se destruyen recursos antes de la evaluación del profesor.
+Cuando modificamos `infra/`, `config/` o la configuración de Checkov, el workflow valida el formato, ejecuta Checkov y comprueba Terraform. En `main`, después de estas verificaciones, continúa con `terraform plan` y `terraform apply` utilizando el backend remoto y OIDC.
 
-## 7. Validaciones y evidencias pendientes
+Comprobamos estas etapas en la [ejecución de infraestructura](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451).
 
-- [ ] Confirmar la configuración final en `infra/` y `config/` con Sofía.
-- [ ] Confirmar el comportamiento de `app.yml` e `infra.yml` con Ana.
-- [ ] Confirmar endpoints y contenedor ejecutable con Sara.
-- [ ] Capturar el despliegue real de Azure Container Apps, sus revisiones, réplicas y URL pública.
-- [ ] Guardar las ejecuciones de Checkov y Trivy en `docs/evidencias/`.
-- [ ] Actualizar este diagrama si la arquitectura implementada difiere del diseño propuesto.
+### Aplicación
 
-**Requisito relacionado:** R15 (diagrama de arquitectura). La creación de este documento no implica que R15 esté validado; se necesita revisar que el diagrama coincida con la solución real.
+Cuando modificamos `app/`, el workflow construye la imagen, ejecuta Trivy y, desde `main`, la publica en ACR con el SHA del commit. Después actualiza la imagen de la Container App y comprueba `/health`.
+
+Esta secuencia se verificó en la [ejecución de la versión v2](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318).
+
+## 6. Seguridad y control de costos
+
+Utilizamos OIDC para autenticar los workflows, permisos mínimos para descargar imágenes y un usuario sin privilegios para ejecutar la aplicación dentro del contenedor. También aplicamos Checkov y Trivy como controles previos a la publicación.
+
+Elegimos ACR Basic y recursos limitados por tratarse de un taller académico. Documentamos las ocho excepciones de Checkov junto con sus medidas compensatorias y riesgos residuales en [docs/decisiones.md](decisiones.md). El control de gastos y el procedimiento de destrucción están en [docs/destruccion-y-costos.md](destruccion-y-costos.md).
+
+## 7. Acceso y revisiones
+
+La aplicación quedó publicada en:
+
+https://ca-nova-t2-dev.bravepond-62a4a131.brazilsouth.azurecontainerapps.io
+
+Las pruebas del cambio de `v1` a `v2` quedaron asociadas a los commits `2e8b26f` y `3cfe621`. El archivo `docs/evidencias/06-revisiones-e-imagenes.txt` muestra ambas imágenes en ACR y la respuesta pública de `v2`.
+
+En la consulta de revisiones de Azure se observó únicamente `ca-nova-t2-dev--latest`. Aunque el modo `Single` mantiene una sola revisión activa, el historial disponible en nuestro ambiente no permitió mostrar dos revisiones diferenciadas. Por eso respaldamos el cambio con los pipelines, los SHA y las respuestas HTTP, sin afirmar que Azure Container Apps nunca conserve revisiones anteriores.
+
+## 8. Evidencias relacionadas
+
+Para comprobar la arquitectura usamos los archivos Terraform, los workflows y los reportes de `docs/evidencias/`. Los enlaces a las ejecuciones, las capturas de Azure, la seguridad y las pruebas de la aplicación están reunidos en [docs/evidencias/registro.md](evidencias/registro.md).
+
+**Requisito relacionado:** R15 — Diagrama y descripción de arquitectura.

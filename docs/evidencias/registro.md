@@ -1,259 +1,197 @@
-# Registro de evidencias — Proyecto NOVA
+# Registro de evidencias — Grupo NOVA
 
-**Proyecto:** Taller 2 — Infraestructura y despliegue automatizado en Azure
-**Equipo:** NOVA (Sofía, Sara, Ana y Bianca)
+**Proyecto:** Infraestructura y despliegue automatizado en Azure  
+**Equipo:** NOVA 
+**Repositorio:** https://github.com/ISCOUTB/nova-parcial2  
+
+## 1. ¿Qué registramos aquí?
+
+Durante el desarrollo realizamos pruebas locales, análisis de seguridad y despliegues en Azure. En este documento reunimos las capturas, los reportes y los enlaces con los que podemos mostrar lo que hicimos y los resultados que obtuvimos.
+
+El estado de los 25 requisitos se consulta en [la matriz de requisitos](../matriz-requisitos.md). Aquí nos concentramos en **dónde está cada evidencia** para no repetir la misma explicación en varios documentos.
+
+## 2. Repositorio y Pull Requests
+
+Utilizamos ramas y Pull Requests para organizar el trabajo de las cuatro integrantes.
+
 **Repositorio:** https://github.com/ISCOUTB/nova-parcial2
 
-## 1. Objetivo
+| PR | Evidencia de trabajo |
+|---|---|
+| #32 | Configuración y primer análisis de Checkov. |
+| #34 | Análisis local de Trivy. |
+| #36 | Primer documento de decisiones técnicas. |
+| #38 | Matriz de requisitos R1–R25. |
+| #39 | Documentación del README. |
+| #40 | Cambio de la aplicación de `v1` a `v2`. |
+| #43 | Excepciones justificadas de Checkov. |
+| #47 | Cambio de la etiqueta de infraestructura `version_infra`. |
+| #48 | Integración de capturas de evidencia. |
 
-Este documento reúne las evidencias disponibles del desarrollo del Taller 2 del Grupo NOVA, incluyendo el repositorio, la infraestructura Terraform, los workflows de GitHub Actions, las pruebas de seguridad y el despliegue de la aplicación en Azure.
+Estos registros permiten consultar los cambios realizados y cómo llegaron a `main`.
 
-Su propósito es facilitar la revisión de los requisitos solicitados por el profesor y diferenciar las actividades comprobadas de aquellas que todavía requieren evidencias adicionales.
+## 3. Pipeline de aplicación: GitHub Actions
 
-## 2. GitHub y control de versiones
+**Resultado: verificado.** El workflow `.github/workflows/app.yml` construyó la imagen Docker, ejecutó Trivy, se autenticó en Azure con OIDC, publicó la imagen en ACR con una etiqueta SHA, actualizó Container Apps y comprobó `/health`.
 
-**Estado:** Verificado.
+- [Ejecución anterior, `v1`](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897).
+- [Ejecución posterior, `v2`](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318).
 
-El proyecto se encuentra publicado en GitHub y utiliza ramas y Pull Requests para organizar los cambios realizados por las integrantes.
+La siguiente captura muestra el pipeline después del cambio a `v2`:
 
-**Evidencias disponibles:**
+![Pipeline de la aplicación v2](./R5-pipeline-main-v2.png)
 
-- Repositorio: https://github.com/ISCOUTB/nova-parcial2
-- PR #32: configuración y resultados de Checkov.
-- PR #34: documentación del análisis de Trivy.
-- PR #36: decisiones técnicas y limitaciones.
-- PR #38: actualización de la matriz R1–R25.
-- PR #39: ampliación del README principal.
+El cambio se integró mediante el PR #40:
 
-**Pendiente:** Conservar una captura de las reglas de protección de la rama `main`, si están configuradas.
+![Pull Request de v1 a v2](./R5-pr-v1-v2.png)
 
-## 3. GitHub Actions — Aplicación
+## 4. Pipeline de infraestructura
 
-**Estado:** Ejecución exitosa verificada.
+**Resultado: verificado.** En `.github/workflows/infra.yml` comprobamos el análisis Checkov, las validaciones de Terraform, la planificación y la aplicación de cambios desde `main`.
 
-Se comprobó una ejecución del workflow `App - Validación, seguridad y despliegue` en la rama `main`.
+[Ejecución con Checkov, plan y apply](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451)
 
-**Ejecución:**
+Conservamos capturas de las distintas etapas:
 
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
+![Ejecución del pipeline de infraestructura](./07a-infra-run.png)
 
-**Etapas verificadas:**
+![Planificación de Terraform](./07b-infra-plan.png)
 
-- Construcción de la imagen Docker.
-- Análisis de vulnerabilidades con Trivy.
-- Autenticación en Azure mediante OIDC.
-- Inicio de sesión en Azure Container Registry.
-- Publicación de la imagen Docker con etiqueta basada en el SHA del commit.
-- Actualización de la imagen en Azure Container Apps.
-- Comprobación satisfactoria del endpoint `/health`.
+![Aplicación de cambios de Terraform](./07c-infra-apply.png)
 
-Estas etapas finalizaron correctamente en la ejecución consultada.
+![Ejecución de Checkov](./07d-checkov.png)
 
-**Pendiente:** Guardar capturas de la ejecución y completar la demostración de cambio entre dos versiones de la aplicación.
+### Demostración de cambio independiente
 
-## 4. GitHub Actions — Infraestructura
+Modificamos la etiqueta `version_infra` de `1` a `2` mediante el PR #47. El reporte `07-cambio-etiqueta.txt` confirma que los recursos consultados tenían el nuevo valor después de `terraform apply`.
 
-**Estado:** Validación y planificación verificadas.
-
-El workflow `Infra - Validación Terraform` cuenta con una ejecución exitosa.
-
-**Ejecución:**
-
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38683030473
-
-**Etapas verificadas:**
-
-- Instalación de Terraform.
-- Comprobación de formato mediante `terraform fmt`.
-- Inicialización de Terraform sin backend para validar la configuración.
-- Validación mediante `terraform validate`.
-- Autenticación OIDC.
-- Inicialización con backend remoto.
-- Ejecución de `terraform plan`.
-
-**Limitaciones:**
-
-La versión del workflow revisada todavía no incluye la ejecución automatizada de Checkov ni de `terraform apply`.
-
-**Pendiente:** Coordinar con Ana y Sofía las validaciones faltantes y conservar sus evidencias cuando estén disponibles.
+**Reporte:** [07-cambio-etiqueta.txt](./07-cambio-etiqueta.txt).
 
 ## 5. Autenticación OIDC
 
-**Estado:** Funcionamiento verificado en GitHub Actions.
+**Resultado: autenticación verificada en los pipelines.** Utilizamos una identidad federada para que GitHub Actions pudiera iniciar sesión en Azure sin una contraseña permanente de despliegue.
 
-Se comprobó que los pasos de inicio de sesión en Azure mediante OIDC finalizaron correctamente en ejecuciones de los workflows de aplicación e infraestructura.
+[Ejecución adicional de prueba OIDC](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38679307234)
 
-Esto permite que GitHub Actions se autentique en Azure mediante identidad federada, sin requerir una contraseña permanente de Azure en el código.
+**Revisión final:** comprobar permisos asignados y confirmar que no haya valores sensibles expuestos en archivos, registros o capturas. Una ejecución correcta de OIDC no reemplaza esa revisión.
 
-**Evidencia adicional de prueba OIDC:**
+## 6. Checkov: análisis de infraestructura
 
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38679307234
+**Resultado: primer análisis, excepciones documentadas y ejecución automatizada.**
 
-**Pendiente:** Realizar una revisión final de la configuración de permisos y verificar que no existan secretos expuestos en archivos o capturas.
+| Análisis | Aprobados | Fallidos | Omitidos contabilizados |
+|---|---:|---:|---:|
+| Inicial | 2 | 8 | 0 |
+| Posterior a `skip-check` | 2 | 0 | 0 |
 
-## 6. Análisis de seguridad — Checkov
+En el primer análisis identificamos ocho controles fallidos sobre ACR. Los revisamos con Sofía y documentamos las justificaciones, medidas compensatorias y riesgos residuales en [docs/decisiones.md](../decisiones.md).
 
-**Estado:** Análisis local realizado, con hallazgos pendientes.
+El reporte posterior no muestra los ocho controles porque fueron excluidos mediante `skip-check`: **no debemos confundir esa exclusión con la corrección de los riesgos**.
 
-Se ejecutó Checkov sobre la infraestructura Terraform del proyecto.
+**Reportes:**
 
-**Resultados:**
+- [checkov-terraform.txt](./checkov-terraform.txt) — análisis inicial.
+- [checkov-excepciones-2026-10-15.txt](./checkov-excepciones-2026-10-15.txt) — análisis posterior.
+- `.checkov.yaml` — configuración del repositorio.
 
-| Resultado | Cantidad |
-|---|---:|
-| Controles aprobados | 2 |
-| Controles fallidos | 8 |
-| Controles omitidos | 0 |
+El análisis automatizado quedó registrado en la [ejecución de infraestructura](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38744864451) y en la captura `07d-checkov.png`.
 
-Los controles aprobados corresponden a la deshabilitación de la cuenta administradora de ACR y de las descargas anónimas.
+## 7. Trivy: seguridad de la imagen Docker
 
-Los ocho controles fallidos están relacionados con características de seguridad, conectividad y disponibilidad de Azure Container Registry.
+**Resultado: pruebas local y automatizada verificadas.** Analizamos la imagen local `nova-app:seguridad` con Trivy 0.69.3. No se encontraron vulnerabilidades HIGH ni CRITICAL con corrección disponible bajo los filtros utilizados.
 
-**Archivo de evidencia:**
+**Reporte local:** [trivy-resultado.md](./trivy-resultado.md).
 
-`docs/evidencias/checkov-terraform.txt`
+Después comprobamos el análisis de Trivy en GitHub Actions. Conservamos sus resultados en dos capturas:
 
-**Pendiente:**
+![Trivy, primera parte del reporte](./02-trivy-resultados-parte1.png)
 
-- Revisar los ocho hallazgos con Sofía.
-- Corregir los controles que sea viable solucionar.
-- Documentar las limitaciones y excepciones justificadas.
-- Comprobar la integración de Checkov en GitHub Actions.
+![Trivy, segunda parte y leyenda](./03-trivy-resultados-parte2.png)
 
-No se considera finalizada la revisión de seguridad de infraestructura mientras estos puntos permanezcan abiertos.
+[Ejecución automatizada de Trivy](https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318)
 
-## 7. Análisis de seguridad — Trivy
+La columna de secretos del reporte aparece como «Not scanned», así que no afirmamos que se haya realizado un análisis de secretos. Tampoco consideramos las pruebas como una garantía de ausencia de vulnerabilidades de otras severidades.
 
-**Estado:** Análisis local y ejecución automatizada realizados.
+## 8. Construcción Docker y pruebas de Sara
 
-Se ejecutó Trivy 0.69.3 sobre la imagen `nova-app:seguridad`.
+**Resultado: construcción y pruebas locales registradas.** Sara preparó la aplicación Flask con Gunicorn, un usuario sin privilegios y los endpoints `/` y `/health`. Estas capturas muestran la ejecución local y las pruebas automatizadas.
 
-**Resultados del análisis local:**
+![Construcción local de la imagen Docker](./R14-docker-build.jpeg)
 
-| Severidad | Vulnerabilidades detectadas |
-|---|---:|
-| HIGH | 0 |
-| CRITICAL | 0 |
+![Endpoint principal en entorno local](./R14-endpoint-local.jpeg)
 
-El análisis utilizó `--severity HIGH,CRITICAL` y `--ignore-unfixed`, por lo que el resultado se limita a las vulnerabilidades incluidas en esos criterios.
+![Endpoint health local](./R14-health-local.jpeg)
 
-Adicionalmente, se comprobó que Trivy se ejecutó correctamente dentro del workflow de aplicación.
+![Pruebas locales con Pytest](./R14-pytest.png)
 
-**Archivo de evidencia:**
+El Dockerfile y las pruebas originales se pueden consultar en `app/Dockerfile` y `app/test_app.py`.
 
-`docs/evidencias/trivy-resultado.md`
+## 9. Azure Container Registry
 
-**Evidencia automatizada:**
+**Resultado: publicación de imágenes verificada.** El pipeline publicó imágenes en ACR utilizando etiquetas basadas en el SHA completo del commit.
 
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
+![Imágenes publicadas en ACR](./04-acr-imagenes.png)
 
-**Pendiente:** Conservar una captura de la ejecución automatizada para la sustentación.
+También comprobamos las etiquetas en [06-revisiones-e-imagenes.txt](./06-revisiones-e-imagenes.txt), donde figuran tanto `2e8b26f7ab75ad018be487d053c8939e666beaa1` (`v1`) como `3cfe621e49a3dff576b81b4386bcc29ecb114f0b` (`v2`).
 
-## 8. Azure Container Registry
+## 10. Aplicación pública y pruebas de Azure Container Apps
 
-**Estado:** Publicación de imagen verificada.
+**Resultado: publicación HTTPS y respuesta de `v2` comprobadas.** La dirección de nuestra aplicación es:
 
-El workflow de aplicación confirmó la autenticación en ACR, la construcción de la imagen con el SHA del commit y su publicación en el registro.
+https://ca-nova-t2-dev.bravepond-62a4a131.brazilsouth.azurecontainerapps.io
 
-La infraestructura utiliza Azure Container Registry Basic y tiene deshabilitada la cuenta administradora.
+El reporte de Sofía registra que `GET /` devolvió `version: v2` y `GET /health` devolvió `status: ok`, también con `v2`.
 
-**Evidencia:**
+![Comprobación de la URL pública](./05-url-v2.png)
 
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
+![Aplicación v2 desplegada](./R5-app-azure-v2.png)
 
-**Pendiente:** Guardar una captura de Azure Portal que muestre el registro, el repositorio de imágenes y la etiqueta publicada.
+![Endpoint health de la versión v2](./R5-health-azure-v2.png)
 
-## 9. Azure Container Apps
+Comprobaremos nuevamente la URL antes de la sustentación, ya que la aplicación solo responde mientras los recursos estén activos.
 
-**Estado:** Actualización y endpoint de salud verificados.
+## 11. Revisiones y cambio de versión
 
-La ejecución exitosa del pipeline confirmó que se pudo actualizar la imagen de la Container App y consultar satisfactoriamente el endpoint `/health`.
+**Resultado: cambio `v1 → v2` demostrado; comparación directa de revisiones limitada.**
 
-La infraestructura Terraform declara ingreso externo, conexión HTTPS, CPU de 0.25 vCPU, memoria de 0.5 GiB y escalado entre una y dos réplicas.
+El pipeline de `v1` corresponde al commit `2e8b26f` y el de `v2` al commit `3cfe621`. Conservamos ambas imágenes en ACR y la aplicación desplegada respondió con `v2`.
 
-**Evidencia:**
+En la consulta de Azure se observó una sola revisión, `ca-nova-t2-dev--latest`, asociada a la imagen de `v2`. La configuración utiliza `revision_mode = "Single"`.
 
-https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
+**Archivo principal:** [06-revisiones-e-imagenes.txt](./06-revisiones-e-imagenes.txt).
 
-**Pendiente:**
+![Revisión actual de Container Apps](./06-revision-actual.png)
 
-- Registrar la URL pública definitiva.
-- Guardar una captura de la aplicación funcionando.
-- Verificar las etiquetas de los recursos en Azure.
-- Comprobar CPU, memoria y réplicas configuradas.
-- Guardar evidencia de las revisiones de Azure Container Apps.
+![Consulta de revisiones inactivas](./06b-revisiones-inactivas.png)
 
-## 10. Demostración de cambios de versión
+No tenemos dos identificadores de revisión distintos para mostrar la revisión anterior y la nueva. Documentamos esa limitación en `docs/decisiones.md` y en la matriz R1–R25. No confundimos las dos imágenes SHA con dos revisiones visibles de Azure.
 
-**Estado:** En proceso.
+## 12. Etiquetas, límites y escalado
 
-La aplicación cuenta con un mecanismo para mostrar su versión mediante la variable `APP_VERSION`.
+**Resultado: valores comprobados en Azure.** El reporte `09-limites-y-etiquetas.txt` registra los recursos desplegados y sus parámetros: CPU `0.25`, memoria `0.5Gi`, una réplica mínima, dos máximas y modo `Single`.
 
-Para demostrar el despliegue automático de una nueva versión se necesita comprobar un cambio del código de la aplicación, su integración a `main` y la correspondiente actualización de Azure Container Apps.
+[09-limites-y-etiquetas.txt](./09-limites-y-etiquetas.txt)
 
-**Evidencias requeridas:**
+![Etiquetas en Azure Portal](./08-etiqueta-portal.png)
 
-- Versión anterior visible en la aplicación.
-- Cambio realizado en GitHub.
-- Ejecución exitosa de GitHub Actions.
-- Nueva versión visible después del despliegue.
-- Lista de revisiones de Azure Container Apps.
+![CPU y memoria del contenedor](./09a-contenedor-cpu-memoria.png)
 
-La demostración de dos versiones todavía no se considera completada con la evidencia registrada en este documento.
+![Escalado mínimo y máximo](./09b-escalado-replicas.png)
 
-## 11. Documentación técnica
+También contamos con [07-cambio-etiqueta.txt](./07-cambio-etiqueta.txt), que registra el cambio efectivo de `version_infra` de `1` a `2`.
 
-**Estado:** Documentos publicados.
+## 13. Costos y eliminación de infraestructura
 
-El repositorio contiene:
+**Resultado: configuración de costos y procedimiento documentados.** Utilizamos ACR Basic, Container Apps Consumption, límites de recursos y una cuota diaria de Log Analytics. El procedimiento de eliminación está en [docs/destruccion-y-costos.md](../destruccion-y-costos.md) y el script en `scripts/destroy.sh`.
 
-| Documento | Finalidad |
-|---|---|
-| `README.md` | Presentación, arquitectura, configuración, despliegue y acceso |
-| `docs/arquitectura.md` | Descripción y diagrama de arquitectura |
-| `docs/matriz-requisitos.md` | Seguimiento de los 25 requisitos |
-| `docs/decisiones.md` | Decisiones técnicas, limitaciones y mejoras |
-| `docs/evidencias/checkov-terraform.txt` | Resultado del análisis Checkov |
-| `docs/evidencias/trivy-resultado.md` | Resultado del análisis local Trivy |
-| `docs/evidencias/registro.md` | Consolidación de evidencias del proyecto |
+Sofía también generó un plan de destrucción para comprobar qué recursos se eliminarían, **sin ejecutar la destrucción**.
 
-Algunos documentos deberán actualizarse con los datos finales de Azure antes de la entrega.
+[10-plan-destroy.txt](./10-plan-destroy.txt)
 
-## 12. Lista de verificación de evidencias
+Los recursos deben permanecer disponibles hasta que termine la evaluación del profesor.
 
-### Repositorio y documentación
+## 14. Revisión final para la entrega
 
-- [x] Repositorio publicado.
-- [x] Cambios integrados mediante Pull Requests.
-- [x] Diagrama de arquitectura publicado.
-- [x] Matriz de requisitos actualizada.
-- [x] Documento de decisiones técnicas publicado.
-- [x] README ampliado y publicado.
-- [ ] Captura de las reglas de protección de `main`.
+Antes de entregar, comprobamos que los archivos y las capturas estén publicados en `main`, que la URL responda, y que cada requisito tenga un enlace o reporte que lo respalde. También revisamos que no haya secretos expuestos en el repositorio o las imágenes.
 
-### Seguridad
-
-- [x] Reporte de Checkov publicado.
-- [x] Resultado local de Trivy publicado.
-- [x] Ejecución automatizada de Trivy verificada.
-- [ ] Revisión final de los ocho hallazgos de Checkov.
-- [ ] Ejecución automatizada de Checkov comprobada.
-- [ ] Capturas finales de los análisis de seguridad.
-
-### Automatización e infraestructura
-
-- [x] Workflow de aplicación ejecutado correctamente.
-- [x] Workflow de validación Terraform ejecutado correctamente.
-- [x] Ejecución exitosa de `terraform plan`.
-- [x] Inicio de sesión OIDC verificado.
-- [x] Imagen Docker publicada en ACR.
-- [x] Actualización de Container Apps verificada.
-- [x] Endpoint `/health` comprobado.
-- [ ] Ejecución automatizada de `terraform apply` comprobada.
-- [ ] Demostración diferenciada de cambios de aplicación e infraestructura.
-
-### Azure y sustentación
-
-- [ ] URL pública definitiva registrada.
-- [ ] Captura de la aplicación funcionando.
-- [ ] Captura de la imagen y etiqueta
+Los requisitos R22 y R24 mantienen la limitación del historial de revisiones, aunque el cambio de versión y las imágenes SHA están documentados. La sustentación y la revisión final de permisos continúan siendo actividades de cierre del equipo.

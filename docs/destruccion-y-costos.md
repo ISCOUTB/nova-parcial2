@@ -1,80 +1,83 @@
-# Destrucción y costos — Taller 2 (NOVA)
+# Costos y destrucción de infraestructura — Grupo NOVA
 
-Responsable: Sofía (Azure y Terraform). Suscripción: Azure for Students de Sofía (ID `87877b30…`).
+**Proyecto:** Infraestructura y despliegue automatizado en Azure   
+**Región:** Brazil South (`brazilsouth`)
 
-## 1. Destrucción
+## 1. Cuándo eliminaremos los recursos
 
-### Cuándo
+**No debemos destruir la infraestructura antes de la evaluación del profesor.** Nuestra aplicación y sus evidencias deben seguir disponibles durante la sustentación.
 
-**Solo después de la evaluación del profesor.** Hasta entonces la aplicación debe seguir publicada.
+Como los recursos pueden generar costos mientras existen, preparamos un procedimiento para eliminarlos después de terminar la evaluación y confirmar que ya no los necesitamos.
 
-### Cómo
+## 2. Procedimiento de destrucción
 
-Desde la raíz del repositorio, en Git Bash o Cloud Shell, con `az login` hecho por la Propietaria de la suscripción:
+Desde la raíz del repositorio, la persona autorizada puede ejecutar el script en Git Bash o Azure Cloud Shell, después de iniciar sesión con `az login`:
 
 ```bash
 bash scripts/destroy.sh
 ```
 
-El script pide escribir `DESTRUIR` antes de empezar y selecciona la suscripción **por ID**.
+**Advertencia:** este comando elimina recursos reales de Azure. El script exige escribir `DESTRUIR` para continuar y verifica la suscripción configurada. No debe utilizarse únicamente para probar si funciona.
 
-### Orden y qué borra cada paso
+El orden importa porque Terraform necesita acceder a su estado remoto antes de que se eliminen los recursos de soporte.
 
-| Paso | Qué hace | Qué borra | Cómo comprobarlo |
-| --- | --- | --- | --- |
-| 1 | `terraform destroy -var-file=../config/dev.tfvars` | Container App `ca-nova-t2-dev`, entorno `cae-nova-t2-dev`, ACR `acrnovat2ssab` (con sus imágenes), Log Analytics `log-nova-t2-dev`, identidad `id-nova-t2-pull` y su rol AcrPull | `az resource list -g rg-nova-t2-dev` devuelve una lista vacía |
-| 2 | `az group delete -n rg-nova-t2-dev` (pide escribir `BORRAR-DEV`) | El grupo del proyecto, creado por `bootstrap.sh`, y los roles asignados sobre él (los de la identidad de GitHub y el Reader) | `az group exists -n rg-nova-t2-dev` → `false` |
-| 3 (opcional, al final de todo) | `az group delete -n rg-nova-t2-ops` (pide escribir `BORRAR-OPS`) | La Storage Account del estado de Terraform y la identidad `id-nova-t2-github` con sus credenciales federadas | `az group exists -n rg-nova-t2-ops` → `false` |
+| Etapa | Qué eliminamos | Comprobación posterior |
+|---|---|---|
+| **1. `terraform destroy`** | La Container App, su entorno, ACR y sus imágenes, Log Analytics, identidad administrada de descarga y rol `AcrPull`. | Revisar `az resource list -g rg-nova-t2-dev`. |
+| **2. Grupo de recursos del proyecto** | `rg-nova-t2-dev`, preparado por `bootstrap.sh`, junto con los recursos de soporte ligados a ese grupo. | `az group exists -n rg-nova-t2-dev` debe devolver `false`. |
+| **3. Grupo de soporte (opcional, al final)** | `rg-nova-t2-ops`, donde se encuentran el almacenamiento del estado y la identidad federada de GitHub. | `az group exists -n rg-nova-t2-ops` debe devolver `false`. |
 
-El paso 1 va primero porque Terraform necesita su estado (en `rg-nova-t2-ops`) para saber qué borrar. Si se hiciera el paso 3 antes, Terraform perdería su "memoria" y habría que borrar los recursos a mano.
+El script solicita confirmaciones adicionales para eliminar los grupos. El grupo de soporte se elimina al final, porque hacerlo antes dejaría a Terraform sin el estado necesario para identificar los recursos que administra.
 
-Después del paso 3 ya **no funcionan** Terraform ni los workflows de GitHub Actions que entran a Azure. Para reconstruir todo desde cero: `scripts/bootstrap.sh` y luego los pasos del arranque.
+Después de eliminar el grupo de soporte, los workflows que dependen de esos recursos ya no podrán utilizar la misma configuración de Azure. Para reconstruir la infraestructura se debe repetir la preparación inicial con `scripts/bootstrap.sh` y continuar con el arranque del proyecto.
 
-### Verificación previa sin borrar nada
+### Comprobación previa sin borrar recursos
 
-Antes de la evaluación se revisó el plan de destrucción **sin ejecutarlo**:
+Antes de la evaluación, Sofía generó un plan de destrucción **sin ejecutarlo**:
 
 ```bash
 terraform -chdir=infra plan -destroy -var-file=../config/dev.tfvars -no-color > docs/evidencias/10-plan-destroy.txt
 ```
 
-Ver `docs/evidencias/10-plan-destroy.txt`. Debe proponer destruir **solo** los 6 recursos de Terraform y no tocar los grupos de recursos.
+El archivo [10-plan-destroy.txt](evidencias/10-plan-destroy.txt) permite revisar qué recursos administra Terraform y cuáles se verían afectados. Los grupos de recursos y el almacenamiento de soporte deben revisarse por separado porque no forman parte de los seis recursos principales administrados mediante esta configuración.
 
-## 2. Costos
+## 3. Cómo controlamos los costos
 
-Todo se cobra al crédito de Azure for Students: la suscripción no tiene tarjeta asociada. Si el crédito se agota, Azure deshabilita la suscripción; no se genera una factura.
+Trabajamos con la suscripción Azure for Students de Sofía. Para el taller utilizamos recursos reducidos y algunas configuraciones que limitan el consumo. Esto no significa que Azure sea gratuito en todos los casos: los precios y el gasto dependen de los servicios y del tiempo de uso.
 
-### Precios por recurso (región Brazil South, USD)
+### Estimación por servicio
 
-Fuente: API oficial de precios minoristas de Azure, `https://prices.azure.com/api/retail/prices`, consultada el 15 de octubre de 2026.
+Como referencia utilizamos la [API de precios minoristas de Azure](https://prices.azure.com/api/retail/prices), consultada por el equipo el 15 de octubre de 2026 para la región Brazil South.
 
-| Recurso | Configuración del taller | Cómo cobra | Precio (Brazil South) |
-| --- | --- | --- | --- |
-| Azure Container Registry | Basic, `acrnovat2ssab` | Tarifa fija por día mientras exista; 10 GB de almacenamiento incluidos | **USD 0,1666 por día** (≈ USD 5 por mes). Almacenamiento adicional: USD 0,10 por GB/mes |
-| Azure Container Apps | Plan de consumo, 0,25 vCPU / 0,5 GiB, 1–2 réplicas | Por vCPU-segundo y GiB-segundo usados, más solicitudes; el plan de consumo incluye una cantidad gratuita mensual | **Pregunta abierta:** no se pudo consultar el precio para Brazil South. Ver la consulta abajo |
-| Log Analytics | `log-nova-t2-dev`, tope de 0,5 GB/día, retención de 30 días | Por GB ingerido; la retención dentro del período incluido no se cobra aparte | **Pregunta abierta:** no se pudo consultar el precio para Brazil South |
-| Storage del estado | `stnovat2tfssab`, Standard LRS, pocos KB | Por GB almacenado y operaciones | **Pregunta abierta.** Con unos KB de estado, el costo es despreciable |
-| Entorno de Container Apps e identidades | `cae-nova-t2-dev`, `id-nova-t2-pull`, `id-nova-t2-github` | El entorno de consumo no tiene tarifa propia; las identidades administradas no tienen costo | — |
+| Servicio | Configuración del taller | Referencia de cobro |
+|---|---|---|
+| Azure Container Registry | SKU Basic (`acrnovat2ssab`) | La consulta del equipo registró aproximadamente **USD 0,1666 por día** (alrededor de USD 5 al mes), más almacenamiento adicional si corresponde. |
+| Azure Container Apps | Consumption, `0.25` vCPU y `0.5Gi`, entre una y dos réplicas | Depende del consumo de CPU, memoria y solicitudes; puede aplicar la asignación gratuita del plan. No tenemos una cifra exacta validada para el taller. |
+| Log Analytics | Cuota de `0.5 GB/día` y retención de 30 días | Depende de los datos ingeridos. No tenemos una cifra final validada para Brazil South. |
+| Azure Storage | Cuenta estándar LRS para el estado remoto | Se cobra según almacenamiento y operaciones; el estado ocupa poco espacio. |
+| Entorno Consumption e identidades administradas | Recursos de soporte de la solución | No se ha identificado una tarifa independiente por la mera creación del entorno de consumo o las identidades. |
 
-**Para completar las preguntas abiertas**, abrir en el navegador estas consultas a la misma API oficial y anotar el `unitPrice` de cada medidor:
+La cifra de ACR es una referencia de la consulta del equipo, no un importe facturado. Para conocer el precio vigente se puede revisar la [calculadora oficial de Azure](https://azure.microsoft.com/pricing/calculator/) o volver a consultar la API de precios minoristas.
 
-- Container Apps: `https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Azure Container Apps' and armRegionName eq 'brazilsouth'`
-- Log Analytics: `https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Log Analytics' and armRegionName eq 'brazilsouth'`
-- Storage: `https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Storage' and armRegionName eq 'brazilsouth' and skuName eq 'Standard LRS'`
+### Consultar el gasto real
 
-Alternativa: la calculadora oficial, `https://azure.microsoft.com/pricing/calculator/`, con la región Brazil South.
+El gasto del proyecto se revisa en **Azure Portal → Cost Management → Análisis de costos**, seleccionando la suscripción y, cuando corresponda, el filtro `proyecto = taller2-aca`. Los datos de consumo pueden aparecer con retraso.
 
-### Gasto real
+No debemos reemplazar los precios estimados por cifras de gasto real hasta consultarlas directamente en Azure.
 
-El gasto real se consulta en el portal: **Cost Management → Análisis de costos**, con la suscripción `87877b30…`. Se puede filtrar por la etiqueta `proyecto = taller2-aca`. Los costos aparecen con algunas horas de retraso.
+## 4. Medidas de control que aplicamos
 
-### Medidas de control de costos ya aplicadas
+| Medida | Configuración | Para qué sirve |
+|---|---|---|
+| Registro económico | ACR Basic en `infra/main.tf` | Reducir el costo fijo del registro frente a planes superiores. |
+| Contenedor pequeño | `0.25` vCPU y `0.5Gi` en `config/dev.tfvars` | Limitar los recursos usados por réplica. |
+| Escalado acotado | De `1` a `2` réplicas | Evitar un crecimiento ilimitado del número de contenedores. |
+| Límite de registros | Log Analytics con `0.5 GB/día` y 30 días de retención | Controlar el volumen de información ingerida. |
+| Etiquetas | `equipo`, `proyecto`, `ambiente`, `gestionado_por` | Identificar recursos y facilitar el análisis de costos. |
+| Eliminación después de evaluar | `scripts/destroy.sh` | Evitar mantener recursos innecesarios una vez terminado el taller. |
 
-| Medida | Dónde | Efecto |
-| --- | --- | --- |
-| ACR en SKU **Basic** | `infra/main.tf` | El SKU más económico; sin geo-replicación ni red privada |
-| Container App con **0,25 vCPU / 0,5 GiB** | `config/dev.tfvars` | El tamaño mínimo de Container Apps |
-| **Máximo 2 réplicas** (validación en Terraform: entre 1 y 3) | `config/dev.tfvars`, `infra/variables.tf` | Limita el gasto si llega mucho tráfico |
-| Log Analytics con **tope de 0,5 GB/día** y **30 días** de retención | `infra/main.tf` | Evita gastos inesperados por logs |
-| **Etiquetas** `equipo`, `proyecto`, `ambiente`, `gestionado_por` en todos los recursos | `infra/main.tf` (`local.tags`) | Permiten filtrar el gasto en Cost Management |
-| **Destrucción** después de la evaluación | `scripts/destroy.sh` | El ACR deja de cobrar su tarifa diaria |
+Comprobamos CPU, memoria, réplicas y etiquetas mediante [09-limites-y-etiquetas.txt](evidencias/09-limites-y-etiquetas.txt) y las capturas de Azure.
+
+## 5. Cierre
+
+Nuestra prioridad fue mantener la aplicación disponible durante la evaluación, con suficientes recursos para demostrar los cambios y con un consumo razonable. Al finalizar, Sofía y el equipo deberán verificar el alcance de la eliminación, ejecutar el procedimiento autorizado y revisar Cost Management para comprobar que no queden recursos innecesarios generando cargos.
