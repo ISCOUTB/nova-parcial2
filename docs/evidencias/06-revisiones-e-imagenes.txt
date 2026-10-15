@@ -1,0 +1,32 @@
+=== Evidencia 06: revisiones e imágenes (Taller 2, NOVA)
+Fecha: 2026-10-15 09:02
+
+El cambio v1 -> v2 se desplegó automáticamente con app.yml. v1 = commit 2e8b26f
+(https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897); v2 = commit 3cfe621
+(https://github.com/ISCOUTB/nova-parcial2/actions/runs/38687530318). Limitación: el entorno conserva
+una sola revisión activa (ca-nova-t2-dev--latest) que se reemplaza en cada despliegue; por eso la
+revisión anterior no aparece listada. Las imágenes de ambas versiones permanecen en ACR con su SHA.
+
+=== Revisiones de ca-nova-t2-dev
+Revision                Activa    Creada                       Imagen
+----------------------  --------  ---------------------------  --------------------------------------------------------------------------
+ca-nova-t2-dev--latest  True      2026-10-15T13:45:09.9924488  acrnovat2ssab.azurecr.io/nova-app:3cfe621e49a3dff576b81b4386bcc29ecb114f0b
+
+=== Etiquetas de nova-app en acrnovat2ssab (más reciente primero)
+Result
+----------------------------------------
+3cfe621e49a3dff576b81b4386bcc29ecb114f0b
+2e8b26f7ab75ad018be487d053c8939e666beaa1
+15f4c44f86c508c1a471428fa67890a1a5b7db25
+840a03728252e6da5e0fb92637adaa819a27a856
+106226fee55dd8c1cb91d7307028e9b3cc4fac29
+41717c86acd34580d928f9ac11c2ec089609fd08
+2f0c9319890af85f48727e7e3813464dadcef3ab
+
+=== GET /
+{"environment":"dev","message":"Nova Taller 2 funcionando correctamente","version":"v2"}
+
+
+=== GET /health
+{"status":"ok","version":"v2"}
+
