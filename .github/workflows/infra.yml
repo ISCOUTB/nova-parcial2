@@ -1,0 +1,41 @@
+
+name: Infra - Validación Terraform
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'config/**'
+      - '.github/workflows/infra.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - 'config/**'
+      - '.github/workflows/infra.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Verificar formato
+        run: terraform fmt -check -recursive infra
+
+      - name: Inicializar Terraform sin backend
+        run: terraform -chdir=infra init -backend=false
+
+      - name: Validar configuración
+        run: terraform -chdir=infra validate
