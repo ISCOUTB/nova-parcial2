@@ -39,7 +39,7 @@ jobs:
 
       - name: Escanear imagen con Trivy
         if: success()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: nova-app:test
           format: table
