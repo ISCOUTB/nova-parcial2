@@ -66,6 +66,13 @@ resource "azurerm_container_app_environment" "env" {
   logs_destination           = "log-analytics"
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
   tags                       = local.tags
+
+  # Azure crea el entorno con el perfil "Consumption" (pago por uso).
+  # Se declara para que Terraform no intente quitarlo.
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
 }
 
 # --- Container App ----------------------------------------------------------------
@@ -77,6 +84,7 @@ resource "azurerm_container_app" "app" {
   container_app_environment_id = azurerm_container_app_environment.env.id
   resource_group_name          = data.azurerm_resource_group.dev.name
   revision_mode                = "Single" # cada imagen nueva crea una revisión; la anterior queda inactiva
+  workload_profile_name        = "Consumption"
   tags                         = local.tags
 
   identity {
