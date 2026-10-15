@@ -1,6 +1,6 @@
 name: Infra - Validación Terraform
 
-on:
+'on':
   pull_request:
     paths:
       - 'infra/**'
