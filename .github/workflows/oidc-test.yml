@@ -1,7 +1,7 @@
 
 name: Prueba OIDC Azure
 
-on:
+'on':
   workflow_dispatch:
 
 permissions:
