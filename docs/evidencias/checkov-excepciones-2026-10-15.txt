@@ -1,0 +1,22 @@
+﻿
+       _               _
+   ___| |__   ___  ___| | _______   __
+  / __| '_ \ / _ \/ __| |/ / _ \ \ / /
+ | (__| | | |  __/ (__|   < (_) \ V /
+  \___|_| |_|\___|\___|_|\_\___/ \_/
+
+By Prisma Cloud | version: 3.3.29 
+
+terraform scan results:
+
+Passed checks: 2, Failed checks: 0, Skipped checks: 0
+
+Check: CKV_AZURE_137: "Ensure ACR admin account is disabled"
+	PASSED for resource: azurerm_container_registry.acr
+	File: /main.tf:36-43
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-iam-policies/bc-azure-137
+Check: CKV_AZURE_138: "Ensures that ACR disables anonymous pulling of images"
+	PASSED for resource: azurerm_container_registry.acr
+	File: /main.tf:36-43
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-iam-policies/ensure-azure-acr-disables-anonymous-image-pulling
+

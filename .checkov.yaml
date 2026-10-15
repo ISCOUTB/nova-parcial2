@@ -1,6 +1,8 @@
 
 # Seguridad de infraestructura - Grupo NOVA
-# Analiza los recursos definidos en Terraform.
+# Ambiente: dev academico
+# Excepciones revisadas con Sofia, responsable de Azure y Terraform.
+# Justificacion detallada: docs/decisiones.md
 
 framework:
   - terraform
@@ -13,5 +15,32 @@ quiet: false
 soft-fail: false
 download-external-modules: false
 
-# No se omiten controles de seguridad sin justificación.
-skip-check: []
+# Excepciones documentadas para el ACR del ambiente dev.
+# Estas exclusiones NO significan que los riesgos desaparezcan.
+# Revisar esta lista antes de utilizar otro ambiente o ACR.
+
+skip-check:
+  # Registro publico: se exige autenticacion, sin usuario admin.
+  - CKV_AZURE_139
+
+  # Escaneo continuo: se usa Trivy antes de publicar imagenes.
+  - CKV_AZURE_163
+
+  # Firma de imagenes: se usan etiquetas SHA y publicacion por CI/CD.
+  - CKV_AZURE_164
+
+  # Georreplicacion: ambiente academico de una sola region.
+  - CKV_AZURE_165
+
+  # Cuarentena: Trivy bloquea imagenes con hallazgos definidos.
+  - CKV_AZURE_166
+
+  # Retencion automatica: se requiere limpieza controlada.
+  - CKV_AZURE_167
+
+  # Redundancia por zonas: posible falso positivo del analizador.
+  # Azure ya la incluye en Basic en regiones compatibles.
+  - CKV_AZURE_233
+
+  # Endpoints dedicados: no se utiliza red privada en ACR Basic.
+  - CKV_AZURE_237
