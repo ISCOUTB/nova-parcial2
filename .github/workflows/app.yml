@@ -1,5 +1,5 @@
 
-name: App - Validación y despliegue
+name: App - Validación y seguridad
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validar aplicación
+    name: Validar y escanear aplicación
     runs-on: ubuntu-latest
 
     steps:
@@ -32,3 +32,18 @@ jobs:
           test -f app/requirements.txt
           test -f app/Dockerfile
           echo "Archivos de la aplicación encontrados"
+
+      - name: Construir imagen Docker
+        if: success()
+        run: docker build -t nova-app:test ./app
+
+      - name: Escanear imagen con Trivy
+        if: success()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nova-app:test
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
