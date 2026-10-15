@@ -1,0 +1,36 @@
+=== Evidencia 09: límites y etiquetas (Taller 2, NOVA)
+Fecha: 2026-10-15 01:21  |  Suscripción: 87877b30-39be-4c4a-a163-fe80a995025e
+
+=== 1. Container App ca-nova-t2-dev: escalado, recursos, modo y etiquetas
+{
+  "cpu": 0.25,
+  "etiquetas": {
+    "ambiente": "dev",
+    "equipo": "NOVA",
+    "gestionado_por": "terraform",
+    "proyecto": "taller2-aca",
+    "version_infra": "1"
+  },
+  "max_replicas": 2,
+  "memoria": "0.5Gi",
+  "min_replicas": 1,
+  "modo_revisiones": "Single"
+}
+
+=== 2. Recursos en rg-nova-t2-dev
+Nombre           Tipo                                              Region
+---------------  ------------------------------------------------  -----------
+id-nova-t2-pull  Microsoft.ManagedIdentity/userAssignedIdentities  brazilsouth
+acrnovat2ssab    Microsoft.ContainerRegistry/registries            brazilsouth
+log-nova-t2-dev  Microsoft.OperationalInsights/workspaces          brazilsouth
+cae-nova-t2-dev  Microsoft.App/managedEnvironments                 brazilsouth
+ca-nova-t2-dev   Microsoft.App/containerApps                       brazilsouth
+
+=== 3. Recursos en el estado de Terraform
+data.azurerm_resource_group.dev
+azurerm_container_app.app[0]
+azurerm_container_app_environment.env
+azurerm_container_registry.acr
+azurerm_log_analytics_workspace.logs
+azurerm_role_assignment.acr_pull
+azurerm_user_assigned_identity.pull
