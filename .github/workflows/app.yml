@@ -179,11 +179,24 @@ jobs:
           CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
           IMAGE_URI: ${{ needs.publish.outputs.image_uri }}
         run: |
-          az containerapp update \
+          SUFIJO="sha-${GITHUB_SHA::7}"
+          if az containerapp update \
+               --name "$CONTAINER_APP_NAME" \
+               --resource-group "$AZURE_RESOURCE_GROUP" \
+               --image "$IMAGE_URI" \
+               --revision-suffix "$SUFIJO"; then
+            echo "Revisión creada con sufijo $SUFIJO"
+          else
+            echo "::warning::El entorno rechazó el sufijo; se despliega sin sufijo."
+            az containerapp update \
+              --name "$CONTAINER_APP_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --image "$IMAGE_URI"
+          fi
+          az containerapp revision list \
             --name "$CONTAINER_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$IMAGE_URI"
-
+            --all --output table
       - name: Verificar endpoint de salud
         if: steps.app.outputs.exists == 'true'
         env:
