@@ -171,6 +171,7 @@ jobs:
             echo "Container App todavía no existe. Se omite el despliegue inicial."
           fi
 
+    
       - name: Actualizar imagen de Container App
         if: steps.app.outputs.exists == 'true'
         env:
@@ -181,8 +182,7 @@ jobs:
           az containerapp update \
             --name "$CONTAINER_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$IMAGE_URI" \
-            --revision-suffix "sha-${GITHUB_SHA::7}"
+            --image "$IMAGE_URI"
 
       - name: Verificar endpoint de salud
         if: steps.app.outputs.exists == 'true'
