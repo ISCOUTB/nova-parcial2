@@ -181,7 +181,7 @@ jobs:
           az containerapp update \
             --name "$CONTAINER_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$IMAGE_URI"
+            --image "$IMAGE_URI" \
             --revision-suffix "sha-${GITHUB_SHA::7}"
 
       - name: Verificar endpoint de salud
