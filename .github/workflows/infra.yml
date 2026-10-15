@@ -5,6 +5,7 @@ on:
     paths:
       - 'infra/**'
       - 'config/**'
+      - '.checkov.yaml'
       - '.github/workflows/infra.yml'
   push:
     branches:
@@ -12,6 +13,7 @@ on:
     paths:
       - 'infra/**'
       - 'config/**'
+      - '.checkov.yaml'
       - '.github/workflows/infra.yml'
   workflow_dispatch:
 
@@ -24,12 +26,23 @@ concurrency:
 
 jobs:
   validate:
-    name: Validar Terraform
+    name: Validar Terraform y seguridad
     runs-on: ubuntu-latest
 
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Checkov
+        run: python -m pip install checkov
+
+      - name: Analizar seguridad con Checkov
+        run: checkov -d infra --config-file .checkov.yaml --framework terraform
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
