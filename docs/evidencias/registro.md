@@ -49,7 +49,13 @@ https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
 
 Estas etapas finalizaron correctamente en la ejecución consultada.
 
-**Pendiente:** Guardar capturas de la ejecución y completar la demostración de cambio entre dos versiones de la aplicación.
+### Evidencia gráfica
+
+La siguiente captura muestra la ejecución exitosa del workflow posterior al merge a `main`, incluyendo la validación de la aplicación, la publicación de la imagen en Azure Container Registry y el despliegue en Azure Container Apps.
+
+![Pipeline automático de despliegue](./R5-pipeline-main-v2.png)
+
+**Pendiente:** Completar la evidencia de las revisiones anterior y nueva de Azure Container Apps.
 
 ## 4. GitHub Actions — Infraestructura
 
@@ -147,6 +153,14 @@ Adicionalmente, se comprobó que Trivy se ejecutó correctamente dentro del work
 
 https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
 
+### Evidencias gráficas
+
+Las siguientes capturas muestran los resultados obtenidos durante el análisis de seguridad de la imagen con Trivy.
+
+![Resultados de Trivy - Parte 1](./02-trivy-resultados-parte1.png)
+
+![Resultados de Trivy - Parte 2](./03-trivy-resultados-parte2.png)
+
 **Pendiente:** Conservar una captura de la ejecución automatizada para la sustentación.
 
 ## 8. Azure Container Registry
@@ -175,13 +189,47 @@ La infraestructura Terraform declara ingreso externo, conexión HTTPS, CPU de 0.
 
 https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
 
+### Evidencia de aplicación desplegada
+
+**URL pública:**
+
+https://ca-nova-t2-dev.bravepond-62a4a131.brazilsouth.azurecontainerapps.io/
+
+Se verificó que la aplicación desplegada en Azure Container Apps responde correctamente y muestra la versión `v2`.
+
+![Aplicación desplegada en Azure versión v2](./R5-app-azure-v2.png)
+
+También se comprobó el endpoint público `/health`:
+
+https://ca-nova-t2-dev.bravepond-62a4a131.brazilsouth.azurecontainerapps.io/health
+
+El endpoint respondió correctamente con estado `ok` y versión `v2`.
+
+![Endpoint health en Azure versión v2](./R5-health-azure-v2.png)
+
 **Pendiente:**
 
-- Registrar la URL pública definitiva.
-- Guardar una captura de la aplicación funcionando.
 - Verificar las etiquetas de los recursos en Azure.
 - Comprobar CPU, memoria y réplicas configuradas.
 - Guardar evidencia de las revisiones de Azure Container Apps.
+
+### 9.1. Evidencias de contenedorización y validación local
+
+Se realizó la construcción local de la imagen Docker de la aplicación utilizando el archivo `app/Dockerfile`.
+
+![Construcción de la imagen Docker](./R14-docker-build.jpeg)
+
+Se verificó el funcionamiento local del endpoint principal de la aplicación en el puerto 8000.
+
+![Endpoint principal local](./R14-endpoint-local.jpeg)
+
+También se comprobó correctamente el endpoint local `/health`.
+
+![Endpoint health local](./R14-health-local.jpeg)
+
+Finalmente, se ejecutaron las pruebas automáticas definidas en `app/test_app.py`, obteniendo dos pruebas aprobadas correctamente.
+
+![Pruebas automatizadas con pytest](./R14-pytest.png)
 
 ## 10. Demostración de cambios de versión
 
@@ -189,17 +237,35 @@ https://github.com/ISCOUTB/nova-parcial2/actions/runs/38685137897
 
 La aplicación cuenta con un mecanismo para mostrar su versión mediante la variable `APP_VERSION`.
 
+### Evidencia del cambio de aplicación
+
+Se realizó un cambio controlado en `app/app.py`, actualizando la versión de la aplicación de `v1` a `v2`. El cambio fue integrado mediante el Pull Request #40 desde la rama `sara/demo-v2` hacia `main`.
+
+![Pull Request cambio de v1 a v2](./R5-pr-v1-v2.png)
+
+Después del merge, GitHub Actions ejecutó automáticamente el pipeline de aplicación.
+
+![Pipeline automático de la versión v2](./R5-pipeline-main-v2.png)
+
+La nueva versión quedó disponible públicamente en Azure Container Apps:
+
+![Aplicación v2 desplegada en Azure](./R5-app-azure-v2.png)
+
+El endpoint de salud también confirmó el funcionamiento de la nueva versión:
+
+![Health check versión v2](./R5-health-azure-v2.png)
+
 Para demostrar el despliegue automático de una nueva versión se necesita comprobar un cambio del código de la aplicación, su integración a `main` y la correspondiente actualización de Azure Container Apps.
 
-**Evidencias requeridas:**
+**Estado de las evidencias:**
 
-- Versión anterior visible en la aplicación.
-- Cambio realizado en GitHub.
-- Ejecución exitosa de GitHub Actions.
-- Nueva versión visible después del despliegue.
-- Lista de revisiones de Azure Container Apps.
+- [ ] Versión anterior `v1` visible en la aplicación.
+- [x] Cambio de `v1` a `v2` realizado en GitHub.
+- [x] Ejecución exitosa de GitHub Actions.
+- [x] Nueva versión `v2` visible después del despliegue.
+- [ ] Lista de revisiones de Azure Container Apps.
 
-La demostración de dos versiones todavía no se considera completada con la evidencia registrada en este documento.
+La demostración del despliegue automático de `v2` fue verificada. Queda pendiente incorporar la evidencia de la versión anterior y de las revisiones de Azure Container Apps para completar la comparación entre ambas versiones.
 
 ## 11. Documentación técnica
 
@@ -254,6 +320,6 @@ Algunos documentos deberán actualizarse con los datos finales de Azure antes de
 
 ### Azure y sustentación
 
-- [ ] URL pública definitiva registrada.
-- [ ] Captura de la aplicación funcionando.
+- [X] URL pública definitiva registrada.
+- [X] Captura de la aplicación funcionando.
 - [ ] Captura de la imagen y etiqueta
