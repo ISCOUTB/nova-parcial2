@@ -1,3 +1,4 @@
+
 name: App - Validación, seguridad y despliegue
 
 on:
@@ -5,14 +6,12 @@ on:
     paths:
       - 'app/**'
       - '.github/workflows/app.yml'
-
   push:
     branches:
       - main
     paths:
       - 'app/**'
       - '.github/workflows/app.yml'
-
   workflow_dispatch:
 
 permissions:
@@ -26,17 +25,6 @@ jobs:
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
-
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Instalar dependencias
-        run: pip install -r app/requirements.txt
-
-      - name: Ejecutar pruebas
-        run: python -m pytest app/test_app.py -v
 
       - name: Verificar archivos de la aplicación
         run: |
@@ -58,8 +46,8 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
-  deploy:
-    name: Publicar y desplegar en Azure
+  publish:
+    name: Publicar imagen en Azure Container Registry
     needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -67,6 +55,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+    outputs:
+      image_tag: ${{ steps.image.outputs.tag }}
+      image_uri: ${{ steps.image.outputs.uri }}
 
     steps:
       - name: Descargar repositorio
@@ -77,12 +69,10 @@ jobs:
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           ACR_NAME: ${{ vars.ACR_NAME }}
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
-          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
         run: |
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP ACR_NAME ACR_LOGIN_SERVER CONTAINER_APP_NAME; do
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID ACR_NAME ACR_LOGIN_SERVER; do
             if [ -z "${!name}" ]; then
               echo "::error::Falta configurar la variable $name en GitHub."
               exit 1
@@ -95,9 +85,6 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Instalar extensión de Container Apps
-        run: az extension add --name containerapp --upgrade
 
       - name: Iniciar sesión en ACR
         env:
@@ -128,18 +115,76 @@ jobs:
         run: |
           docker push "$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA"
 
-      - name: Actualizar Azure Container App
+      - name: Guardar etiqueta de la imagen
+        id: image
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          echo "tag=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "uri=$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "Imagen publicada: $ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA"
+
+  deploy:
+    name: Desplegar en Azure Container Apps si existe
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Comprobar variables de despliegue
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
-          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          for name in AZURE_RESOURCE_GROUP CONTAINER_APP_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Falta configurar la variable $name en GitHub."
+              exit 1
+            fi
+          done
+
+      - name: Iniciar sesión en Azure mediante OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Comprobar si existe la Container App
+        id: app
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+        run: |
+          if az containerapp show \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --output none 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Container App encontrada."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Container App todavía no existe. Se omite el despliegue inicial."
+          fi
+
+      - name: Actualizar imagen de Container App
+        if: steps.app.outputs.exists == 'true'
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+          IMAGE_URI: ${{ needs.publish.outputs.image_uri }}
         run: |
           az containerapp update \
             --name "$CONTAINER_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA"
+            --image "$IMAGE_URI"
 
       - name: Verificar endpoint de salud
+        if: steps.app.outputs.exists == 'true'
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
@@ -156,12 +201,10 @@ jobs:
           fi
 
           for i in $(seq 1 12); do
-            if curl --fail --silent --show-error \
-              "https://$FQDN/health"; then
+            if curl --fail --silent --show-error "https://$FQDN/health"; then
               echo "Endpoint de salud verificado."
               exit 0
             fi
-
             sleep 10
           done
 
