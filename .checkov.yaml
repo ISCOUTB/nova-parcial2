@@ -1,0 +1,17 @@
+
+# Seguridad de infraestructura - Grupo NOVA
+# Analiza los recursos definidos en Terraform.
+
+framework:
+  - terraform
+
+directory:
+  - infra
+
+compact: true
+quiet: false
+soft-fail: false
+download-external-modules: false
+
+# No se omiten controles de seguridad sin justificación.
+skip-check: []
