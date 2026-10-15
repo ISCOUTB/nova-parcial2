@@ -71,4 +71,3 @@
 - [ ] Está descrito el procedimiento de destrucción, pero no se ejecuta antes de la evaluación.
 - [ ] El equipo confirma el medio de entrega y envía el material.
 
-> **Importante:** No marcar por anticipado requisitos de Azure, Docker, seguridad o pipelines como cumplidos: hay que esperar los registros reales. La guía del equipo señala que la destrucción se hace únicamente después de la evaluación del profesor.
