@@ -1,5 +1,5 @@
 
-name: App - Validación y seguridad
+name: App - Validación, seguridad y despliegue
 
 on:
   pull_request:
@@ -34,13 +34,127 @@ jobs:
           echo "Archivos de la aplicación encontrados"
 
       - name: Construir imagen Docker
-        if: success()
         run: docker build -t nova-app:test ./app
 
       - name: Escanear imagen con Trivy
-        if: success()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          image-ref: nova-app:test
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  deploy:
+    name: Publicar y desplegar en Azure
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Comprobar variables de Azure
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+        run: |
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP ACR_NAME ACR_LOGIN_SERVER CONTAINER_APP_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Falta configurar la variable $name en GitHub."
+              exit 1
+            fi
+          done
+
+      - name: Iniciar sesión en Azure mediante OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Instalar extensión de Container Apps
+        run: az extension add --name containerapp --upgrade
+
+      - name: Iniciar sesión en ACR
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Construir imagen con SHA completo
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          docker build \
+            -t "$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA" \
+            ./app
+
+      - name: Escanear imagen antes de publicarla
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ vars.ACR_LOGIN_SERVER }}/nova-app:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Publicar imagen en ACR
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          docker push "$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA"
+
+      - name: Actualizar Azure Container App
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/nova-app:$GITHUB_SHA"
+
+      - name: Verificar endpoint de salud
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+        run: |
+          FQDN=$(az containerapp show \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          if [ -z "$FQDN" ] || [ "$FQDN" = "null" ]; then
+            echo "::error::No se encontró el dominio público de la aplicación."
+            exit 1
+          fi
+
+          for i in $(seq 1 12); do
+            if curl --fail --silent --show-error \
+              "https://$FQDN/health"; then
+              echo "Endpoint de salud verificado."
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "::error::La aplicación no respondió correctamente en /health."
+          exit 1
+
           image-ref: nova-app:test
           format: table
           exit-code: '1'
