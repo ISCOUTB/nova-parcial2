@@ -1,0 +1,14 @@
+# Todos los archivos de texto se guardan con fin de línea LF (formato Linux)
+* text=auto eol=lf
+
+# Scripts de Windows sí necesitan CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# Binarios: Git no debe modificarlos
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
