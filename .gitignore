@@ -1,4 +1,26 @@
-.venv/
+# Terraform: archivos locales que NO se suben
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# .terraform.lock.hcl SÍ se sube (fija la versión del proveedor)
+
+# Variables locales y secretos
+.env
+*.auto.tfvars
+secrets.tfvars
+
+# Python
 __pycache__/
 *.pyc
-.env
+.venv/
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
