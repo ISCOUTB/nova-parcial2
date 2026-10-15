@@ -1,4 +1,3 @@
-
 name: Infra - Validación Terraform
 
 on:
@@ -18,6 +17,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: nova-infra-dev
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -90,3 +93,54 @@ jobs:
           TF_VAR_name_suffix: ${{ vars.NAME_SUFFIX }}
           TF_VAR_location: ${{ vars.AZURE_LOCATION }}
         run: terraform -chdir=infra plan -input=false -var-file=../config/dev.tfvars
+
+  apply:
+    name: Aplicar infraestructura
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Iniciar sesión en Azure mediante OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Inicializar Terraform con backend remoto
+        env:
+          ARM_USE_OIDC: 'true'
+          ARM_USE_AZUREAD: 'true'
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          terraform -chdir=infra init -input=false \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=taller2-dev.tfstate"
+
+      - name: Aplicar infraestructura
+        env:
+          ARM_USE_OIDC: 'true'
+          ARM_USE_AZUREAD: 'true'
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_app_secret: ${{ secrets.APP_SECRET }}
+          TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_name_suffix: ${{ vars.NAME_SUFFIX }}
+          TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+        run: terraform -chdir=infra apply -input=false -auto-approve -var-file=../config/dev.tfvars
