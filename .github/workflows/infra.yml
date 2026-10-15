@@ -1,4 +1,4 @@
-```yaml
+
 name: Infra - Validación Terraform
 
 on:
@@ -63,4 +63,3 @@ jobs:
         env:
           TF_VAR_app_secret: ${{ secrets.APP_SECRET }}
         run: terraform -chdir=infra plan -input=false
-```
