@@ -48,6 +48,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Descargar repositorio
@@ -56,10 +57,33 @@ jobs:
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Inicializar Terraform
-        run: terraform -chdir=infra init -input=false
+      - name: Iniciar sesión en Azure mediante OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Inicializar Terraform con backend remoto
+        env:
+          ARM_USE_OIDC: 'true'
+          ARM_USE_AZUREAD: 'true'
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          terraform -chdir=infra init -input=false \
+            -backend-config="resource_group_name=rg-nova-t2-ops" \
+            -backend-config="storage_account_name=stnovat2tfssab" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=taller2-dev.tfstate"
 
       - name: Planificar cambios
         env:
+          ARM_USE_OIDC: 'true'
+          ARM_USE_AZUREAD: 'true'
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_app_secret: ${{ secrets.APP_SECRET }}
         run: terraform -chdir=infra plan -input=false
