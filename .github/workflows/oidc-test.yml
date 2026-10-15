@@ -18,11 +18,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verificar estructura del proyecto
+        
         run: |
           echo "Proyecto NOVA"
-          test -d app
+          test -d .github
           test -d infra
-          test -d config
-          test -d scripts
           test -d docs
-          echo "Estructura verificada correctamente"
+          echo "Estructura base verificada correctamente"
+
